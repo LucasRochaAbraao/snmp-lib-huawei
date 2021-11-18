@@ -12,6 +12,8 @@ import sys
 from textwrap import wrap
 from pysnmp import hlapi
 
+# tráfego datacom: .1.3.6.1.4.1.3709.3.6.2.1.1.8
+
 def walk(host, comnty, oid):
     # http://snmplabs.com/pysnmp/docs/pysnmp-hlapi-tutorial.html
     # http://snmplabs.com/pysnmp/examples/hlapi/asyncore/manager/cmdgen/advanced-topics.html
@@ -45,6 +47,8 @@ async def status(olt, comnty, pon=None):
     """ Retorna o status das ONUs da pon passada,
     1 = online,  2 = offline"""
 
+    # oid do datacom: .1.3.6.1.4.1.3709.3.6.2.1.1.7
+
     try: # Tentando realizar o snmpwalk
         if pon: # pon específica
             status_snmp = walk(olt, comnty, f'1.3.6.1.4.1.2011.6.128.1.1.2.46.1.15.{pon}') # oid que retorna ONT status (online = 1, offline = 2)
@@ -61,14 +65,17 @@ async def status(olt, comnty, pon=None):
             status.append('offline')
     return status
 
-async def descricao(olt, comnty, pon=None):
+async def descricao(olt, comnty, pon=None, fabricante="huawei"):
     """ Retorna as descrições das ONUs da PON passada."""
 
     try: # Tentando realizar o snmpwalk
         if pon: # pon específica
             descs_snmp = walk(olt, comnty, f'1.3.6.1.4.1.2011.6.128.1.1.2.43.1.9.{pon}') # oid que retorna descrições
         else: # olt inteira
-            descs_snmp = walk(olt, comnty, '1.3.6.1.4.1.2011.6.128.1.1.2.43.1.9') # oid que retorna descrições
+            if fabricante == "huawei":
+                descs_snmp = walk(olt, comnty, '1.3.6.1.4.1.2011.6.128.1.1.2.43.1.9') # oid que retorna descrições
+            elif fabricante == "datacom":
+                descs_snmp = walk(olt, comnty, '.1.3.6.1.4.1.3709.3.6.2.1.1.5') # oid que retorna descrições
     except: # timeout
         print("Não foi possível realizar o snmp walk das descrições. Aguarde alguns instantes e tente novamente. Saindo...")
         sys.exit()
@@ -82,7 +89,7 @@ async def last_downtime(olt, comnty, pon=None):
             last_downtime = walk(olt, comnty, f'1.3.6.1.4.1.2011.6.128.1.1.2.46.1.23.{pon}') # oid que retorna o Downtime (em hexadecimal)
         else: # olt inteira
             last_downtime = walk(olt, comnty, '1.3.6.1.4.1.2011.6.128.1.1.2.46.1.23') # oid que retorna o Downtime (em hexadecimal)
-    except: # timeout
+    except: #  timeout
         print("Não foi possível realizar o snmp walk do último downtime. Aguarde alguns instantes e tente novamente. Saindo...")
         sys.exit()
 
@@ -107,43 +114,57 @@ async def last_down_cause(olt, comnty, pon=None):
     resultados_value = []
     for res in resultado:
         if res == '2':
-            resultados_value.append("___LOS___")
+            resultados_value.append("____LOS____")
         elif res == '13':
-            resultados_value.append("dying-gasp")
+            resultados_value.append("dying__gasp")
         elif res == '-1':
             resultados_value.append("info_zerada")
         else:
             resultados_value.append("cond_estranha")
     return resultados_value                 # retorna uma lista com as descrições
 
-async def potencia(olt, comnty, pon=None, tipo='onu'):
+async def potencia(olt, comnty, pon=None, tipo='rx', fabricante="huawei"):
     """ Retorna o sinal rx de cada onu na pon passada.""" # Saída é meiia estranha :/ ex: ['HWTC\x84½\x00\x9a', 'HWTC¶\x9eD\x9c']
 
     try: # Tentando realizar o snmpwalk
         if pon: # pon específica
-            if tipo == 'onu':
+            if tipo == 'rx':
                 sinais_snmp = walk(olt, comnty, f'1.3.6.1.4.1.2011.6.128.1.1.2.51.1.4.{pon}') # oid que retorna Potência RX das ONUs
-            elif tipo == 'olt':
+            elif tipo == 'tx':
                 sinais_snmp = walk(olt, comnty, f'.1.3.6.1.4.1.2011.6.128.1.1.2.51.1.6.{pon}') # oid que retorna Potência TX das ONUs
             else:
                 print(f'Para consutar a potência, escolha apenas "onu" ou "olt". Você escolheu: {tipo}')
         else: # olt inteira
-            if tipo == 'onu':
-                sinais_snmp = walk(olt, comnty, '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.4') # oid que retorna Potência RX das ONUs
-            elif tipo == 'olt':
-                sinais_snmp = walk(olt, comnty, '.1.3.6.1.4.1.2011.6.128.1.1.2.51.1.6') # oid que retorna Potência TX das ONUs
-            else:
-                print(f'Para consutar a potência, escolha apenas "onu" ou "olt". Você escolheu: {tipo}')
+            if fabricante == "huawei":
+                if tipo == 'rx':
+                    sinais_snmp = walk(olt, comnty, '1.3.6.1.4.1.2011.6.128.1.1.2.51.1.4') # oid que retorna Potência RX das ONUs
+                elif tipo == 'tx':
+                    sinais_snmp = walk(olt, comnty, '.1.3.6.1.4.1.2011.6.128.1.1.2.51.1.6') # oid que retorna Potência TX das ONUs
+                else:
+                    print(f'Para consutar a potência, escolha apenas "rx" ou "tx". Você escolheu: {tipo}')
+            elif fabricante == "datacom":
+                if tipo == 'rx':
+                    sinais_snmp = walk(olt, comnty, '.1.3.6.1.4.1.3709.3.6.2.1.1.22') # oid que retorna Potência RX das ONUs
+                elif tipo == 'tx':
+                    sinais_snmp = walk(olt, comnty, '.1.3.6.1.4.1.3709.3.6.2.1.1.21') # oid que retorna Potência TX das ONUs
+                else:
+                    print(f'Para consutar a potência, escolha apenas "rx" ou "tx". Você escolheu: {tipo}')
+                
     except: # timeout
         print("Não foi possível realizar o snmp walk das potências. Aguarde alguns instantes e tente novamente. Saindo...")
         sys.exit()
-    sinais = []
-    for sinal in sinais_snmp:
-        temp = f'{int(sinal) / 100:.2f}'
-        if temp == '21474836.47':
-            temp = 'offline'
-        sinais.append(str(temp))
-    return sinais
+    
+
+    if fabricante == "datacom":
+        return sinais_snmp
+    elif fabricante == "huawei":
+        sinais = []
+        for sinal in sinais_snmp:
+            temp = f'{int(sinal) / 100:.2f}'
+            if temp == '21474836.47':
+                temp = 'offline'
+            sinais.append(str(temp))
+        return sinais
 
 async def serial(olt, comnty, pon=None):
     """ Retorna o serial de cada onu na pon passada. """ # falta validar
